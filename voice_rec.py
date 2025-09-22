@@ -1,36 +1,37 @@
-import sounddevice as sd
+import pyaudio
 import queue, json
 from vosk import Model, KaldiRecognizer
-
+from reading import daily_keyword_fetch
 import asyncio
-from reading import fetch_daily_material_object
 
-model = Model("models")
+
+model = Model(r"C:\Users\Gray Dover\Documents\Shared\liturgy.display\models")
 rec = KaldiRecognizer(model,16000)
 
-q = queue.Queue()
+mic = pyaudio.PyAudio()
+stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
+stream.start_stream()   
 
-def callback(indata, frames, time, status):
-    if status:
-        print(status, flush=True)
-    q.put(bytes(indata))
+keywords = asyncio.run(daily_keyword_fetch()) 
 
-with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype='int16', channels=1, callback=callback):
-    print("Listening... (press Ctrl+C to stop)")
-    while True:
-        data = q.get()
-        if rec.AcceptWaveform(data):
-            result = json.loads(rec.Result())
-            text = result.get("text", "").lower()
-            print("Heard:", text)
-            if "the gospel according" in text:
-                print(">>> TRIGGER WORD DETECTED! <<<")
-                print("Processing...")
-                print("Fetching readings object...")
-                material = asyncio.run(fetch_daily_material_object())
-                print("\n\n")
-                print(material["Gospel"])
+print(f"Keywords: {keywords}")
 
-        else:
-            partial = json.loads(rec.PartialResult())
+
+def search_for_keyword(text):
+    for keyword in keywords:
+        if keyword in text.lower():
+            print(f"Keyword '{keyword}' was detected")
+    
+
+while True:
+    data = stream.read(4096, exception_on_overflow = False)
+    if rec.AcceptWaveform(data):
+        text = rec.Result()
+        text = text[14:-3]
+        #print(text)
+        search_for_keyword(text)
+
+
+  
+
 
