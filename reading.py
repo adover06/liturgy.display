@@ -32,6 +32,7 @@ async def daily_keyword_fetch():
     return keywords
 
 
+
 async def main():
     #material = await fetch_daily_material_object()
     #if material:

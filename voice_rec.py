@@ -5,7 +5,7 @@ from reading import daily_keyword_fetch
 import asyncio
 
 
-model = Model(r"C:\Users\Gray Dover\Documents\Shared\liturgy.display\models")
+model = Model(r"/Users/andrewdover/Documents/liturgy.display/models")
 rec = KaldiRecognizer(model,16000)
 
 mic = pyaudio.PyAudio()
@@ -19,6 +19,7 @@ print(f"Keywords: {keywords}")
 
 def search_for_keyword(text):
     for keyword in keywords:
+        print(text.lower())
         if keyword in text.lower():
             print(f"Keyword '{keyword}' was detected")
     
