@@ -3,9 +3,11 @@ import queue, json
 from vosk import Model, KaldiRecognizer
 from reading import daily_keyword_fetch
 import asyncio
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-
-model = Model(r"/Users/andrewdover/Documents/liturgy.display/models")
+model = Model(os.getenv("MODEL_PATH"))
 rec = KaldiRecognizer(model,16000)
 
 mic = pyaudio.PyAudio()
