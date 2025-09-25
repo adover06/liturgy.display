@@ -3,9 +3,12 @@ import json, queue
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer
 from server import send_command  # same process import
+import os
+from dotenv import load_dotenv
 
-MODEL_PATH = r"C:\Users\Gray Dover\Documents\Shared\liturgy.display\models"
-model = Model(MODEL_PATH)
+load_dotenv()
+
+model = Model(os.environ.get("MODEL_PATH"))
 rec = KaldiRecognizer(model, 16000)
 
 PAUSED = False  # hotkey toggles this
