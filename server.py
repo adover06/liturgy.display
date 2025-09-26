@@ -1,34 +1,69 @@
+import asyncio, json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+from reading import fetch_daily_material_object
+from pathlib import Path
+
 
 app = FastAPI()
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections = []
+clients = set()
+broadcast_queue = asyncio.Queue()
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
+READINGS = {}
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    return Path("static/index.html").read_text(encoding="utf-8")
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
-
-manager = ConnectionManager()
-
-# ... html template code from above ...
+@app.get("/control", response_class=HTMLResponse)
+async def control():
+    return Path("static/control.html").read_text(encoding="utf-8")
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+async def ws_endpoint(ws: WebSocket):
+    await ws.accept()
+    clients.add(ws)
     try:
         while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(f"Someone said: {data}")
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("Client disconnected")
+            raw = await ws.receive_text()
+            m = json.loads(raw)
+            if m["cmd"] == "show":
+                section = m.get("title")
+                text = READINGS.get(section)
+                output = {"cmd": "set", "title": section, "text": text}
+                await broadcast_queue.put(json.dumps(output))
+            else:
+                #else statement for when cmd is clear
+                await broadcast_queue.put(json.dumps(m))
+           # msg = await ws.receive_text()
+           # print(msg)
+           # await broadcast_queue.put(msg)
+    except Exception:
+        pass
+    finally:
+        clients.discard(ws)
+
+
+async def _broadcaster():
+    while True:
+        msg = await broadcast_queue.get()
+        dead = []
+        for c in list(clients):
+            try:
+                await c.send_text(msg)
+            except Exception:
+                dead.append(c)
+        for c in dead:
+            clients.discard(c)
+
+
+@app.on_event("startup")
+async def startup_event():
+    global READINGS
+    READINGS = await fetch_daily_material_object()
+    asyncio.create_task(_broadcaster())
+
+def send_command(payload: dict):
+    loop = asyncio.get_event_loop()
+    loop.call_soon_threadsafe(broadcast_queue.put_nowait, json.dumps(payload))

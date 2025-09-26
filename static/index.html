@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+
   <meta charset="utf-8" />
   <title>Litergical Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -23,7 +24,7 @@
       font-family: Inter, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
       line-height: 1.25;
       letter-spacing: 0.2px;
-      font-size: clamp(36px, 6vw, 96px); /* responsive font size */
+      font-size: 25px; /* responsive font size */
       text-align: center;
     }
     .title {
@@ -47,24 +48,27 @@
     <div class="page">
       <div class="title" id="title">Ready</div>
       <div id="text">Waiting for commands…</div>
-      <h3>FastAPI WebSocket Echo</h3>
-    <input id="msg" placeholder="type and press Send" />
-    <button onclick="send()">Send</button>
     <pre id="log"></pre>
     </div>
   </div>
 
   <script>
-    const log = (m) => document.getElementById('log').textContent += m + "\\n";
-      const ws = new WebSocket("ws://localhost:8000/ws");
-      ws.onopen = () => log("[connected]");
-      ws.onmessage = (ev) => log("server: " + ev.data);
-      ws.onclose = () => log("[closed]");
-      function send() {
-        const v = document.getElementById('msg').value;
-        ws.send(v);
-        log("you: " + v);
-      }
+
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen    = () => console.log("[display] ws connected");
+  ws.onclose   = () => console.log("[display] ws closed");
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.cmd === "set") {
+      if (m.title !== undefined) document.getElementById('title').textContent = m.title;
+      if (m.text  !== undefined) document.getElementById('text').textContent  = m.text;
+      if (m.color !== undefined) document.getElementById('bar').style.background = m.color;
+    }
+    if (m.cmd === "clear") {
+      document.getElementById('text').textContent = "";
+    }
+  };
   </script>
 </body>
 </html>
