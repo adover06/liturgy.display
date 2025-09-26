@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-model = Model(os.getenv("MODEL_PATH"))
+model = Model(os.environ.get("MODEL_PATH"))
 rec = KaldiRecognizer(model,16000)
 
 mic = pyaudio.PyAudio()

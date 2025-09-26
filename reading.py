@@ -34,11 +34,10 @@ async def daily_keyword_fetch():
 
 
 async def main():
-    #material = await fetch_daily_material_object()
-    #if material:
-    #    print(f"Today's Catholic Mass Readings:\n{material}")
-    #else:
-    #    print("Failed to fetch readings.")    
-    print(await daily_keyword_fetch())
-
+    material = await fetch_daily_material_object()
+    if material:
+       print(f"Today's Catholic Mass Readings:\n{material}")
+    else:
+       print("Failed to fetch readings.")    
+    # print(await daily_keyword_fetch())
 asyncio.run(main())
