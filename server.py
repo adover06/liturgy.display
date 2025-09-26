@@ -31,7 +31,7 @@ async def ws_endpoint(ws: WebSocket):
             if m["cmd"] == "show":
                 section = m.get("title")
                 text = READINGS.get(section)
-                output = {"cmd": "set", "title": section, "text": text}
+                output = {"cmd": "set", "title": "", "text": text}
                 await broadcast_queue.put(json.dumps(output))
             else:
                 #else statement for when cmd is clear

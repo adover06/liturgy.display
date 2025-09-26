@@ -5,52 +5,16 @@
   <meta charset="utf-8" />
   <title>Litergical Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: #0b0c0e;   /* dark background */
-      color: #eef1f4;        /* light text */
-    }
-    .wrap {
-      display: grid;
-      place-items: center;
-      height: 100%;
-      padding: 5vh 6vw;
-      box-sizing: border-box;
-    }
-    .page {
-      max-width: 1400px;
-      font-family: Inter, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
-      line-height: 1.25;
-      letter-spacing: 0.2px;
-      font-size: 25px; /* responsive font size */
-      text-align: center;
-    }
-    .title {
-      opacity: 0.7;
-      font-size: 0.6em;
-      margin-bottom: 0.3em;
-    }
-    .bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 10px;
-      width: 100%;
-      background: #2ecc71; /* can be changed via websocket */
-    }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="bar" id="bar"></div>
-  <div class="wrap">
-    <div class="page">
-      <div class="title" id="title">Ready</div>
-      <div id="text">Waiting for commands…</div>
+<body class="p-10 font-bold origin-center bg-[#d9cba5] ">
+  <body class="min-h-screen flex items-center justify-center bg-[#d9cba5] p-10 font-bold">
+  <div class="max-w-[1400px] text-center space-y-4">
+    <div class="text-l mb-2" id="title"></div>
+    <div id="text" class="text-6xl leading-relaxed">Welcome</div>
     <pre id="log"></pre>
-    </div>
   </div>
+</body>
 
   <script>
 

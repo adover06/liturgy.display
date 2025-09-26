@@ -1,120 +1,84 @@
 <!doctype html>
-<meta charset="utf-8" />
-<title>Control</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<style>
-  body {
-    font-family: system-ui, Segoe UI, Inter, sans-serif;
-    margin: 24px;
-  }
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-[#0b0c0e] text-[#eef1f4]">  
+  <div id="bar" class="fixed top-0 left-0 h-2 w-full bg-[#2ecc71]"></div>
 
-  button {
-    font-size: 18px;
-    padding: 12px 16px;
-    margin: 8px;
-    background: gray;
-    border: solid 1px #666;
-    color: white;
-    border-radius: 8px;
-  }
+  <main class="min-h-screen grid place-items-center px-[6vw] py-[5vh]">
+    <div class="max-w-[1400px] w-full text-center font-[Inter,system-ui,'Segoe UI',Roboto,Arial,sans-serif]">
+      <h1 class="text-[clamp(28px,4vw,48px)] font-bold mb-6">Remote</h1>
 
-    button:hover {
-    background: lightblue;
-    cursor: pointer;
+      
+      <div class="flex flex-wrap items-center justify-center gap-3 mb-8">
+        <button id="btn-reading1"
+          class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
+          Reading 1
+        </button>
+        <button id="btn-reading2"
+          class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
+          Reading 2
+        </button>
+        <button id="btn-gospel"
+          class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
+          Gospel
+        </button>
+        <button id="btn-clear"
+          class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
+          Clear Screen
+        </button>
+      </div>
+
+      <h3 class="text-[clamp(20px,2.5vw,28px)] font-semibold opacity-80 mb-4">
+        For Custom Text Onscreen
+      </h3>
+      <div class="mx-auto w-1/2 min-w-[280px] max-w-[720px]">
+        <input id="title" placeholder="Title"
+          class="w-full mb-3 px-3 py-2 text-base rounded-md bg-[#222] text-white placeholder-white/60 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-400" />
+        <textarea id="text" rows="4" placeholder="Main text to show"
+          class="w-full mb-4 px-3 py-2 text-base rounded-md bg-[#222] text-white placeholder-white/60 border border-white/10 focus:outline-none focus:ring-2 focus:ring-sky-400"></textarea>
+
+        <button id="btn-send"
+          class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
+          Send
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onopen  = () => console.log("[remote] ws connected");
+    ws.onclose = () => console.log("[remote] ws closed");
+
+    function send(payload) {
+      ws.send(JSON.stringify(payload));
     }
-    button:active {
-    background: black;
-    }
 
-  input,
-  textarea {
-    width: 100%;
-    margin: 8px 0;
-    font-size: 16px;
-    background: #222;
-    width: 50%;
-  }
+    document.getElementById('btn-reading1').onclick = () => {
+      send({ cmd: "show", title: "Reading I" });
+    };
+    document.getElementById('btn-reading2').onclick = () => {
+      send({ cmd: "show", title: "Reading II" });
+    };
+    document.getElementById('btn-gospel').onclick = () => {
+      send({ cmd: "show", title: "Gospel" });
+    };
+    document.getElementById('btn-clear').onclick = () => {
+      send({ cmd: "clear" });
+    };
 
-  html, body {
-      height: 100%;
-      margin: 0;
-      background: #0b0c0e;   /* dark background */
-      color: #eef1f4;        /* light text */
-    }
-    .wrap {
-      display: grid;
-      place-items: center;
-      height: 100%;
-      padding: 5vh 6vw;
-      box-sizing: border-box;
-    }
-    .page {
-      max-width: 1400px;
-      font-family: Inter, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
-      line-height: 1.25;
-      letter-spacing: 0.2px;
-      font-size: clamp(36px, 6vw, 96px); /* responsive font size */
-      text-align: center;
-    }
-    .title {
-      opacity: 0.7;
-      font-size: 0.6em;
-      margin-bottom: 0.3em;
-    }
-    .bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 10px;
-      width: 100%;
-      background: #2ecc71; /* can be changed via websocket */
-    }
-</style>
-
-<center>
-<h1>Remote</h1>
-
-<div>
-  <button id="btn-reading1">Reading 1</button>
-  <button id="btn-reading2">Reading 2</button>
-  <button id="btn-gospel">Gospel</button>
-  <button id="btn-clear">Clear Screen</button>
-</div>
-
-<h3>For Custom Text Onscreen</h3>
-
-<input id="title" placeholder="Title (e.g., Responsorial Psalm)">
-<textarea id="text" rows="4" placeholder="Text to show"></textarea>
-<br>
-<button id="btn-send">Send</button>
-</center>
-<script>
-  const ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen  = () => console.log("[remote] ws connected");
-  ws.onclose = () => console.log("[remote] ws closed");
-
-  function send(payload) {
-    ws.send(JSON.stringify(payload));
-  }
-
-  
-  document.getElementById('btn-reading1').onclick = () => {
-    send({ "cmd": "show", "title": "Reading I" });
-  };
-  document.getElementById('btn-reading2').onclick = () => {
-    send({ cmd: "show", title: "Reading II" });
-  };
-  document.getElementById('btn-gospel').onclick = () => {
-    send({ cmd: "show", title: "Gospel" });
-  };
-  document.getElementById('btn-clear').onclick = () => {
-    send({ cmd: "show" });
-  };
-
-
-  document.getElementById('btn-send').onclick = () => {
-    const title = document.getElementById('title').value;
-    const text  = document.getElementById('text').value;
-    send({ cmd: "set", title, text });
-  };
-</script>
+    document.getElementById('btn-send').onclick = () => {
+      const title = document.getElementById('title').value;
+      const text  = document.getElementById('text').value;
+      send({ cmd: "set", title, text });
+      document.getElementById('title').value = "";
+      document.getElementById('text').value = "";
+    };
+  </script>
+</body>
+</html>
