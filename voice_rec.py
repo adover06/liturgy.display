@@ -16,22 +16,18 @@ stream.start_stream()
 
 keywords = asyncio.run(daily_keyword_fetch()) 
 
-print(f"Keywords: {keywords}")
 
 
 def search_for_keyword(text):
-    for keyword in keywords:
-        print(text.lower())
-        if keyword in text.lower():
-            print(f"Keyword '{keyword}' was detected")
-    
+    if (keywords.get(text.lower())):
+        print(f"{keywords.get(text.lower())}")
 
 while True:
     data = stream.read(4096, exception_on_overflow = False)
     if rec.AcceptWaveform(data):
         text = rec.Result()
         text = text[14:-3]
-        #print(text)
+        print(text)
         search_for_keyword(text)
 
 
