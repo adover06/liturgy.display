@@ -33,7 +33,7 @@ async def ws_endpoint(ws: WebSocket):
             print(f"[server] Received: {raw}")
             m = json.loads(raw)
 
-            import voice_rec
+            import src.voice_rec as voice_rec
             await voice_rec.handle_command(m.get("cmd"), m.get("title"))
             
     except Exception as e:

@@ -2,7 +2,7 @@ import pyaudio
 import json
 from vosk import Model, KaldiRecognizer
 
-from reading import get_material
+from src.reading import get_material
 from server import send_command
 
 import os

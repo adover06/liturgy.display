@@ -2,7 +2,7 @@ import threading
 import uvicorn
 
 import server
-import voice_rec
+import src.voice_rec as voice_rec
 
 def main():
     print("[main] Starting liturgy display app...")
