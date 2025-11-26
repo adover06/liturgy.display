@@ -2,50 +2,47 @@ import asyncio
 from catholic_mass_readings import USCCB
 import json
 
-async def fetch_daily_material_object():
-    all_text = {}
-    async with USCCB() as usccb:
-        mass = await usccb.get_today_mass()
-        if not mass:
-            raise SystemExit("No Mass found for today")
-        all_text["Mass Title"] = mass.title
-        for section in mass.sections:
-            if section.header == "Reading I" or section.header == "Gospel" or section.header == "Reading II":
-                for reading in section.readings:
-                    all_text[section.header] = reading.text
-    return all_text 
 
-async def daily_keyword_fetch():
-    keywords = {}
+async def get_material(material_type, wordsPerSlide=5)->dict:
+    returnObject = {}
     async with USCCB() as usccb:
         mass = await usccb.get_today_mass()
         if not mass:
-            raise SystemExit("No Mass found for today")
-        for section in mass.sections:
-            if section.header == "Reading I" or section.header == "Gospel" or section.header == "Reading II":
-                for readings in section.readings:
-                    keywords[" ".join(readings.text.split(" ")[:10]).lower()] = readings.text
-    return keywords
-
-async def get_material(material_type):
-    material = ""
-    async with USCCB() as usccb:
-        mass = await usccb.get_today_mass()
-        if not mass:
-            return "SJSU Newman Center"
+            return {"slides": ["SJSU Newman Center"], "wordsPerSlide": wordsPerSlide}
+        
+        material = None
         for section in mass.sections:
             if section.header == material_type:
-                print(section.readings[0].text)
-                material = section.readings[0].text 
-                return material
-        return "SJSU Newman Center"
+                #print(section.readings[0].text)
+                material = section.readings[0].text
+                break
+        
+        if material:
+            wordNum = 0
+            curSlide = ""
+            wordList = material.split()
+            slides = []
+            for word in wordList:
+                if wordNum < wordsPerSlide:
+                    curSlide += word + " "
+                    wordNum += 1
+                else:
+                    slides.append(curSlide.strip())
+                    curSlide = word + " "
+                    wordNum = 1
+            # Don't forget the last slide
+            if curSlide.strip():
+                slides.append(curSlide.strip())
+            
+            returnObject["slides"] = slides
+            returnObject["wordsPerSlide"] = wordsPerSlide
+        else:
+            returnObject["slides"] = ["SJSU Newman Center"]
+            returnObject["wordsPerSlide"] = wordsPerSlide
+        
+        return returnObject
 
 async def main():
-    #print(await get_material("Reading 2"))
-    # material = await fetch_daily_material_object()
-    # if material:
-    #    print(f"Today's Catholic Mass Readings:\n{json.dumps(material, indent=2)}")
-    # else:
-    #    print("Failed to fetch readings.")    
-    # print(await daily_keyword_fetch())
+    pass
+if __name__ == "__main__":
     asyncio.run(main())

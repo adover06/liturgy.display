@@ -1,38 +1,48 @@
 <!doctype html>
 <html lang="en">
 <head>
-
   <meta charset="utf-8" />
-  <title>Litergical Display</title>
+  <title>Liturgical Display</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="p-10 font-bold origin-center bg-[#d9cba5] ">
-  <body class="min-h-screen flex items-center justify-center bg-[#d9cba5] p-10 font-bold">
-  <div class="max-w-[1400px] text-center space-y-4">
-    <div class="text-l mb-2" id="title"></div>
-    <div id="text" class="text-6xl leading-relaxed">Welcome</div>
-    <pre id="log"></pre>
+<body class="min-h-screen bg-gradient-to-b from-[#efe5cf] to-[#d9cba5] flex items-center justify-center p-6">
+  <div class="w-full max-w-5xl bg-white/60 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30 overflow-hidden">
+    <!-- color bar (updated by ws messages) -->
+    
+
+    <div class="p-8 md:p-12 text-center">
+      <div id="title" class="text-lg md:text-9xl text-gray-700 mb-4 tracking-wide"></div>
+
+      <div id="text" class="text-4xl md:text-7xl leading-tight md:leading-tight font-extrabold text-gray-900 drop-shadow-md">
+        Welcome
+      </div>
+
+      
+    </div>
   </div>
-</body>
 
   <script>
-
-  const ws = new WebSocket(`ws://${location.host}/ws`);
-
-  ws.onopen    = () => console.log("[display] ws connected");
-  ws.onclose   = () => console.log("[display] ws closed");
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.cmd === "set") {
-      if (m.title !== undefined) document.getElementById('title').textContent = m.title;
-      if (m.text  !== undefined) document.getElementById('text').textContent  = m.text;
-      if (m.color !== undefined) document.getElementById('bar').style.background = m.color;
+    
+    function appendLog(...args) {
+      console.log(...args);
     }
-    if (m.cmd === "clear") {
-      document.getElementById('text').textContent = "";
-    }
-  };
+
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+
+    ws.onopen    = () => appendLog("[display] ws connected");
+    ws.onclose   = () => appendLog("[display] ws closed");
+    ws.onerror   = (e) => appendLog("[display] ws error", e);
+    ws.onmessage = (ev) => {
+      appendLog("[display] recv", ev.data);
+      const m = JSON.parse(ev.data);
+      if (m.cmd === "set") {
+        if (m.title !== undefined) document.getElementById('title').textContent = m.title;
+        if (m.text  !== undefined) document.getElementById('text').textContent  = m.text;
+      } else if (m.cmd === "clear") {
+        document.getElementById('text').textContent = "";
+      }
+    };
   </script>
 </body>
 </html>

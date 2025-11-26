@@ -3,3 +3,4 @@ models
 __pycache__
 .env 
 static/style.css
+venv/
