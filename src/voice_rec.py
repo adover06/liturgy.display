@@ -3,7 +3,7 @@ import json
 from vosk import Model, KaldiRecognizer
 
 from src.reading import get_material
-from server import send_command
+from src.server import send_command
 
 import os
 from dotenv import load_dotenv

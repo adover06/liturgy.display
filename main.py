@@ -1,7 +1,7 @@
 import threading
 import uvicorn
 
-import server
+import src.server as server
 import src.voice_rec as voice_rec
 
 def main():
