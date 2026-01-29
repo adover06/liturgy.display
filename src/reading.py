@@ -7,17 +7,20 @@ async def get_material(material_type, wordsPerSlide=5)->dict:
     returnObject = {}
     async with USCCB() as usccb:
         mass = await usccb.get_today_mass()
+        
         if not mass:
-            return {"slides": ["SJSU Newman Center"], "wordsPerSlide": wordsPerSlide}
+            return {"slides": [], "wordsPerSlide": wordsPerSlide}
         
         material = None
+        title = None
         for section in mass.sections:
             if section.header == material_type:
                 #print(section.readings[0].text)
                 material = section.readings[0].text
+                title = section.readings[0]
                 break
         
-        if material:
+        if material and title:
             wordNum = 0
             curSlide = ""
             wordList = material.split()
@@ -34,10 +37,11 @@ async def get_material(material_type, wordsPerSlide=5)->dict:
             if curSlide.strip():
                 slides.append(curSlide.strip())
             
+            returnObject["title"] = str(title)
             returnObject["slides"] = slides
             returnObject["wordsPerSlide"] = wordsPerSlide
         else:
-            returnObject["slides"] = ["SJSU Newman Center"]
+            returnObject["slides"] = []
             returnObject["wordsPerSlide"] = wordsPerSlide
         
         return returnObject

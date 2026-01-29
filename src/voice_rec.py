@@ -20,6 +20,7 @@ QUEUE_MAXSIZE = 50
 committed_words = []
 last_partial_words = []
 
+slide_title = ""
 slidequeue = deque()
 isReadingActive = False
 
@@ -27,12 +28,14 @@ async def load_slides_for_reading(reading_type: str):
     global slidequeue
     global isReadingActive
     global committed_words
+    global slide_title
     
     committed_words = []
     isReadingActive = True
     slidequeue.clear()
     slide_object = await get_material(reading_type, WORDS_PER_SLIDE)
     new_slides = slide_object.get("slides", [])
+    slide_title = slide_object.get("title", "")
     
     for slide in new_slides:
         slidequeue.append(slide)
@@ -47,22 +50,22 @@ def send_next_slide():
     
     if slidequeue:
         slide = slidequeue.popleft()
-        send_command({"cmd": "set", "title": "", "text": slide})
+        send_command({"cmd": "set", "title": slide_title, "text": slide})
     else:
         print("[voice_rec] No more slides")
-        isReadingActive = False
-        send_command({"cmd": "set", "title": "", "text": ""})
+        stop_reading()
 
 def stop_reading():
     global isReadingActive
     global currentWordCount
     global slidequeue
+    global slide_title
     
     isReadingActive = False
     currentWordCount = []
     slidequeue.clear()
 
-    send_command({"cmd": "set", "title": "", "text": ""})
+    send_command({"cmd": "set", "title": slide_title, "text": ""})
 
 
 async def handle_command(cmd: str, title: str):
