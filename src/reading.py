@@ -17,7 +17,8 @@ async def get_material(material_type, wordsPerSlide=5)->dict:
             yesterday = datetime.now() - timedelta(days=1)
             try:
                 mass = await usccb.get_mass_from_date(yesterday)
-            except:
+            except Exception as e:
+                print(f"[reading] Error fetching yesterday's mass: {e}")
                 pass
         
         if not mass:

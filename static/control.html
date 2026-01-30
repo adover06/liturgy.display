@@ -54,24 +54,29 @@
     let ws;
     let reconnectInterval = 1000; // Start with 1 second
     const maxReconnectInterval = 30000; // Max 30 seconds
-    let isConnected = false;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 50; // Stop trying after 50 attempts
 
     function connect() {
       ws = new WebSocket(`ws://${location.host}/ws`);
       
       ws.onopen = () => {
         console.log("[remote] ws connected");
-        isConnected = true;
         reconnectInterval = 1000; // Reset reconnect interval on successful connection
+        reconnectAttempts = 0; // Reset attempt counter
       };
       
       ws.onclose = () => {
         console.log("[remote] ws closed, reconnecting...");
-        isConnected = false;
-        setTimeout(() => {
-          reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-          connect();
-        }, reconnectInterval);
+        reconnectAttempts++;
+        if (reconnectAttempts < maxReconnectAttempts) {
+          setTimeout(() => {
+            connect();
+            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
+          }, reconnectInterval);
+        } else {
+          console.log("[remote] Max reconnection attempts reached. Please reload the page.");
+        }
       };
       
       ws.onerror = (e) => {
@@ -81,7 +86,7 @@
     }
 
     function send(payload) {
-      if (isConnected && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(payload));
       } else {
         console.log("[remote] Cannot send, not connected");
