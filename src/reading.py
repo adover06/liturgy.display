@@ -19,7 +19,6 @@ async def get_material(material_type, wordsPerSlide=5)->dict:
                 mass = await usccb.get_mass_from_date(yesterday)
             except Exception as e:
                 print(f"[reading] Error fetching yesterday's mass: {e}")
-                pass
         
         if not mass:
             print("[reading] No mass data available")

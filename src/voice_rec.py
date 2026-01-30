@@ -63,14 +63,12 @@ def send_next_slide():
 
 def stop_reading():
     global isReadingActive
-    global currentWordCount
     global slidequeue
     global slide_title
     global current_slide_word_count
     
     isReadingActive = False
     slide_title = ""
-    currentWordCount = []
     slidequeue.clear()
     current_slide_word_count = 0
 
@@ -161,15 +159,29 @@ def audio_stream_worker(audio_queue: queue.Queue):
     else:
         print("[voice_rec] Using default microphone")
     
-    stream = mic.open(
-        format=pyaudio.paInt16, 
-        channels=1, 
-        rate=16000, 
-        input=True, 
-        frames_per_buffer=8192,
-        input_device_index=input_device_index
-    )
-    stream.start_stream()
+    try:
+        stream = mic.open(
+            format=pyaudio.paInt16, 
+            channels=1, 
+            rate=16000, 
+            input=True, 
+            frames_per_buffer=8192,
+            input_device_index=input_device_index
+        )
+        stream.start_stream()
+    except Exception as e:
+        print(f"[voice_rec] Error opening microphone (index={input_device_index}): {e}")
+        print("[voice_rec] Falling back to default microphone")
+        # Fallback to default mic
+        stream = mic.open(
+            format=pyaudio.paInt16, 
+            channels=1, 
+            rate=16000, 
+            input=True, 
+            frames_per_buffer=8192
+        )
+        stream.start_stream()
+    
     while True:
         data = stream.read(4096, exception_on_overflow = False)
         audio_queue.put(data, block=True)

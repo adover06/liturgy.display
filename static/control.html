@@ -70,10 +70,11 @@
         console.log("[remote] ws closed, reconnecting...");
         reconnectAttempts++;
         if (reconnectAttempts < maxReconnectAttempts) {
+          const currentInterval = reconnectInterval;
+          reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
           setTimeout(() => {
             connect();
-            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-          }, reconnectInterval);
+          }, currentInterval);
         } else {
           console.log("[remote] Max reconnection attempts reached. Please reload the page.");
         }

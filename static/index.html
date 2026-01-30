@@ -38,10 +38,11 @@
         appendLog("[display] ws closed, reconnecting...");
         reconnectAttempts++;
         if (reconnectAttempts < maxReconnectAttempts) {
+          const currentInterval = reconnectInterval;
+          reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
           setTimeout(() => {
             connect();
-            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-          }, reconnectInterval);
+          }, currentInterval);
         } else {
           appendLog("[display] Max reconnection attempts reached. Please reload the page.");
         }
