@@ -4,3 +4,5 @@ __pycache__
 .env 
 static/style.css
 venv/
+model/*.json
+model/words.txt

@@ -62,6 +62,7 @@ def stop_reading():
     global slide_title
     
     isReadingActive = False
+    slide_title = ""
     currentWordCount = []
     slidequeue.clear()
 
