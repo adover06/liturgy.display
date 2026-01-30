@@ -15,7 +15,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 WORDS_PER_SLIDE = int(os.getenv("WORDS_PER_SLIDE"))
-QUEUE_MAXSIZE = 50             
+MICROPHONE_INDEX = os.getenv("MICROPHONE_INDEX")  # Optional mic selection
+QUEUE_MAXSIZE = 50
 
 committed_words = []
 last_partial_words = []
@@ -23,6 +24,7 @@ last_partial_words = []
 slide_title = ""
 slidequeue = deque()
 isReadingActive = False
+current_slide_word_count = 0  # Track expected words in current slide
 
 async def load_slides_for_reading(reading_type: str):
     global slidequeue
@@ -47,9 +49,13 @@ async def load_slides_for_reading(reading_type: str):
 def send_next_slide():
     global slidequeue
     global isReadingActive
+    global current_slide_word_count
     
     if slidequeue:
         slide = slidequeue.popleft()
+        # Count the actual words in this slide
+        current_slide_word_count = len(slide.split())
+        print(f"[voice_rec] Sending slide with {current_slide_word_count} words")
         send_command({"cmd": "set", "title": slide_title, "text": slide})
     else:
         print("[voice_rec] No more slides")
@@ -60,11 +66,13 @@ def stop_reading():
     global currentWordCount
     global slidequeue
     global slide_title
+    global current_slide_word_count
     
     isReadingActive = False
     slide_title = ""
     currentWordCount = []
     slidequeue.clear()
+    current_slide_word_count = 0
 
     send_command({"cmd": "set", "title": slide_title, "text": ""})
 
@@ -82,13 +90,16 @@ async def handle_command(cmd: str, title: str):
 
 def process_words(currentCount: str):
     global committed_words
+    global current_slide_word_count
 
     print(f"[voice_rec] Committed words: {committed_words}")
     if not isReadingActive:
         return
     
     temp_word_count = len(committed_words)
-    if temp_word_count >= WORDS_PER_SLIDE:
+    # Use the actual word count of the current slide instead of WORDS_PER_SLIDE
+    # This handles the case where the last slide has fewer words
+    if temp_word_count >= current_slide_word_count:
         committed_words = []
         send_next_slide()
 
@@ -138,13 +149,40 @@ def word_recogniser_worker(audio_queue: queue.Queue):
                     print(f"Recognition error: {e}")
 def audio_stream_worker(audio_queue: queue.Queue):
     mic = pyaudio.PyAudio()
-    stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
+    
+    # Use specified microphone index if provided, otherwise use default
+    input_device_index = None
+    if MICROPHONE_INDEX is not None:
+        try:
+            input_device_index = int(MICROPHONE_INDEX)
+            print(f"[voice_rec] Using microphone index: {input_device_index}")
+        except ValueError:
+            print(f"[voice_rec] Invalid MICROPHONE_INDEX '{MICROPHONE_INDEX}', using default mic")
+    else:
+        print("[voice_rec] Using default microphone")
+    
+    stream = mic.open(
+        format=pyaudio.paInt16, 
+        channels=1, 
+        rate=16000, 
+        input=True, 
+        frames_per_buffer=8192,
+        input_device_index=input_device_index
+    )
     stream.start_stream()
     while True:
         data = stream.read(4096, exception_on_overflow = False)
         audio_queue.put(data, block=True)
 
 def run_voice_recognition():
+    # List available audio devices for debugging
+    mic = pyaudio.PyAudio()
+    print("[voice_rec] Available audio input devices:")
+    for i in range(mic.get_device_count()):
+        info = mic.get_device_info_by_index(i)
+        if info['maxInputChannels'] > 0:
+            print(f"  [{i}] {info['name']}")
+    mic.terminate()
 
     audio_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
 

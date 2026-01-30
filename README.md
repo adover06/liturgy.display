@@ -40,8 +40,13 @@ Create a `.env` file in the project root with at least:
 WORDS_PER_SLIDE=40
 MODEL_PATH=/your/path/to/vosk/model
 ```
+Optional configuration:
+```
+MICROPHONE_INDEX=0
+```
 - WORDS_PER_SLIDE: number of words shown per slide before auto-advance
 - MODEL_PATH: path to the extracted Vosk model directory
+- MICROPHONE_INDEX (optional): specific microphone device index to use. If not set, uses system default. Run the app once to see available devices listed at startup.
 
 ## Running
 Start the app (example):

@@ -19,21 +19,45 @@
       console.log(...args);
     }
 
-    const ws = new WebSocket(`ws://${location.host}/ws`);
+    let ws;
+    let reconnectInterval = 1000; // Start with 1 second
+    const maxReconnectInterval = 30000; // Max 30 seconds
 
-    ws.onopen    = () => appendLog("[display] ws connected");
-    ws.onclose   = () => appendLog("[display] ws closed");
-    ws.onerror   = (e) => appendLog("[display] ws error", e);
-    ws.onmessage = (ev) => {
-      appendLog("[display] recv", ev.data);
-      const m = JSON.parse(ev.data);
-      if (m.cmd === "set") {
-        if (m.title !== undefined) document.getElementById('title').textContent = m.title;
-        if (m.text  !== undefined) document.getElementById('text').textContent  = m.text;
-      } else if (m.cmd === "clear") {
-        document.getElementById('text').textContent = "";
-      }
-    };
+    function connect() {
+      ws = new WebSocket(`ws://${location.host}/ws`);
+      
+      ws.onopen = () => {
+        appendLog("[display] ws connected");
+        reconnectInterval = 1000; // Reset reconnect interval on successful connection
+      };
+      
+      ws.onclose = () => {
+        appendLog("[display] ws closed, reconnecting...");
+        setTimeout(() => {
+          reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
+          connect();
+        }, reconnectInterval);
+      };
+      
+      ws.onerror = (e) => {
+        appendLog("[display] ws error", e);
+        ws.close(); // This will trigger onclose which handles reconnection
+      };
+      
+      ws.onmessage = (ev) => {
+        appendLog("[display] recv", ev.data);
+        const m = JSON.parse(ev.data);
+        if (m.cmd === "set") {
+          if (m.title !== undefined) document.getElementById('title').textContent = m.title;
+          if (m.text  !== undefined) document.getElementById('text').textContent  = m.text;
+        } else if (m.cmd === "clear") {
+          document.getElementById('text').textContent = "";
+        }
+      };
+    }
+
+    // Start initial connection
+    connect();
   </script>
 </body>
 </html>

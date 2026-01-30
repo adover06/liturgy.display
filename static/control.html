@@ -51,13 +51,45 @@
   </main>
 
   <script>
-    const ws = new WebSocket(`ws://${location.host}/ws`);
-    ws.onopen  = () => console.log("[remote] ws connected");
-    ws.onclose = () => console.log("[remote] ws closed");
+    let ws;
+    let reconnectInterval = 1000; // Start with 1 second
+    const maxReconnectInterval = 30000; // Max 30 seconds
+    let isConnected = false;
+
+    function connect() {
+      ws = new WebSocket(`ws://${location.host}/ws`);
+      
+      ws.onopen = () => {
+        console.log("[remote] ws connected");
+        isConnected = true;
+        reconnectInterval = 1000; // Reset reconnect interval on successful connection
+      };
+      
+      ws.onclose = () => {
+        console.log("[remote] ws closed, reconnecting...");
+        isConnected = false;
+        setTimeout(() => {
+          reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
+          connect();
+        }, reconnectInterval);
+      };
+      
+      ws.onerror = (e) => {
+        console.log("[remote] ws error", e);
+        ws.close(); // This will trigger onclose which handles reconnection
+      };
+    }
 
     function send(payload) {
-      ws.send(JSON.stringify(payload));
+      if (isConnected && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+      } else {
+        console.log("[remote] Cannot send, not connected");
+      }
     }
+
+    // Start initial connection
+    connect();
 
     document.getElementById('btn-reading1').onclick = () => {
       send({ cmd: "show", title: "Reading 1" });
