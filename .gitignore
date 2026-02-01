@@ -6,3 +6,4 @@ static/style.css
 venv/
 model/*.json
 model/words.txt
+vosk-model/
