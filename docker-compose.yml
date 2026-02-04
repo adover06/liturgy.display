@@ -3,12 +3,15 @@ services:
     build: ./display_voice
     volumes:
       - ./display_voice:/app
-      - ./vosk-model:/app/vosk-model:ro
+      - ./vosk-model:/app/vosk-model
     ports:
       - "8000:8000"
-    devices:
-      - /dev/snd:/dev/snd
+    # devices:
+      # - /dev/snd:/dev/snd
+    env_file:
+      - .env
     environment:
+      - VOSK_MODEL_URL=https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
       - MODEL_PATH=/app/vosk-model
   bot:
     build: ./discord
