@@ -1,0 +1,17 @@
+services:
+  web:
+    build: ./display_voice
+    volumes:
+      - ./display_voice:/app
+      - ./vosk-model:/app/vosk-model:ro
+    ports:
+      - "8000:8000"
+    devices:
+      - /dev/snd:/dev/snd
+    environment:
+      - MODEL_PATH=/app/vosk-model
+  bot:
+    build: ./discord
+    volumes:
+      - ./discord:/app
+
