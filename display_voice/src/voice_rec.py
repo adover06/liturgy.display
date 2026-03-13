@@ -136,15 +136,29 @@ def word_recogniser_worker(audio_queue: queue.Queue):
                     audio_queue.task_done()
                 except Exception as e:
                     print(f"Recognition error: {e}")
-def audio_stream_worker(audio_queue: queue.Queue):
+def list_audio_devices():
     mic = pyaudio.PyAudio()
-    stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=8192)
+    print("[voice_rec] Available audio input devices:")
+    for i in range(mic.get_device_count()):
+        info = mic.get_device_info_by_index(i)
+        if info.get("maxInputChannels", 0) > 0:
+            print(f"  [{i}] {info['name']}")
+    mic.terminate()
+
+def audio_stream_worker(audio_queue: queue.Queue):
+    device_index_env = os.getenv("MIC_DEVICE_INDEX")
+    device_index = int(device_index_env) if device_index_env is not None else None
+
+    mic = pyaudio.PyAudio()
+    stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True,
+                      frames_per_buffer=8192, input_device_index=device_index)
     stream.start_stream()
     while True:
-        data = stream.read(4096, exception_on_overflow = False)
+        data = stream.read(4096, exception_on_overflow=False)
         audio_queue.put(data, block=True)
 
 def run_voice_recognition():
+    list_audio_devices()
 
     audio_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
 
