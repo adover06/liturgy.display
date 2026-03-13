@@ -38,6 +38,14 @@
         </button>
       </div>
 
+      <div class="mx-auto mb-8 w-full max-w-[720px] rounded-lg border border-white/10 bg-[#15181d] p-4 text-left">
+        <div class="mb-2 text-sm font-semibold">Microphone Diagnostics</div>
+        <div class="mb-1 text-xs opacity-80">Backend: <span id="backend-status">waiting...</span></div>
+        <div class="mb-1 text-xs opacity-80">Live Partial: <span id="partial-text">(none)</span></div>
+        <div class="mb-1 text-xs font-semibold opacity-90">Final Transcript</div>
+        <div id="transcript-log" class="max-h-40 overflow-y-auto whitespace-pre-wrap rounded bg-[#10141a] p-2 text-xs leading-relaxed opacity-90">(none)</div>
+      </div>
+
       <h3 class="text-[clamp(20px,2.5vw,28px)] font-semibold opacity-80 mb-4">
         For Custom Text Onscreen
       </h3>
@@ -60,9 +68,13 @@
     let ws;
     let micStreaming = false;
     let sendStatusTimer;
+    let transcriptLines = [];
 
     const micToggleButton = document.getElementById('btn-mic-toggle');
     const micStatus = document.getElementById('mic-status');
+    const backendStatus = document.getElementById('backend-status');
+    const partialText = document.getElementById('partial-text');
+    const transcriptLog = document.getElementById('transcript-log');
     const titleInput = document.getElementById('title');
     const textInput = document.getElementById('text');
     const sendButton = document.getElementById('btn-send');
@@ -71,11 +83,9 @@
     function connectWebSocket() {
       ws = new WebSocket(`ws://${location.host}/ws`);
       ws.onopen  = () => {
-        console.log("[remote] ws connected");
         send({ cmd: "mic_status" });
       };
       ws.onclose = () => {
-        console.log("[remote] ws closed, reconnecting...");
         setTimeout(connectWebSocket, 2000);
       };
       ws.onmessage = (event) => {
@@ -83,6 +93,10 @@
           const message = JSON.parse(event.data);
           if (message.cmd === "mic_state") {
             applyMicState(message.title || "unknown", message.text || "");
+          } else if (message.cmd === "mic_backend") {
+            applyBackendState(message.title || "unknown", message.text || "");
+          } else if (message.cmd === "mic_detect") {
+            applyMicDetect(message.title || "unknown", message.text || "");
           }
         } catch (error) {
           console.warn("Failed to parse WS message", error);
@@ -107,6 +121,35 @@
 
       const label = state || "unknown";
       micStatus.textContent = detail ? `Mic: ${label} - ${detail}` : `Mic: ${label}`;
+    }
+
+    function applyBackendState(state, detail) {
+      const normalizedState = state || "unknown";
+      let label = normalizedState;
+
+      if (normalizedState === "model_pending") {
+        label = "model_not_loaded";
+      }
+
+      backendStatus.textContent = detail ? `${label} - ${detail}` : label;
+    }
+
+    function applyMicDetect(kind, text) {
+      if (!text) {
+        return;
+      }
+
+      if (kind === "partial") {
+        partialText.textContent = text;
+        return;
+      }
+
+      partialText.textContent = "(none)";
+      transcriptLines.push(text);
+      if (transcriptLines.length > 10) {
+        transcriptLines = transcriptLines.slice(-10);
+      }
+      transcriptLog.textContent = transcriptLines.length > 0 ? transcriptLines.join("\n") : "(none)";
     }
 
     function send(payload) {

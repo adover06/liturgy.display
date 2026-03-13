@@ -27,11 +27,6 @@
   </div>
 
   <script>
-    
-    function appendLog(...args) {
-      console.log(...args);
-    }
-
   let ws;
   let audioWs;
   let audioContext;
@@ -41,6 +36,8 @@
 
   let micArmed = false;
   let micStreaming = false;
+  let outgoingChunkCount = 0;
+  let outgoingByteCount = 0;
 
   const overlay = document.getElementById('mic-overlay');
   const overlayStatus = document.getElementById('mic-overlay-status');
@@ -63,6 +60,18 @@
       int16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
     }
     return int16;
+  }
+
+  function calculateRms(floatBuffer) {
+    if (!floatBuffer || floatBuffer.length === 0) {
+      return 0;
+    }
+    let sum = 0;
+    for (let i = 0; i < floatBuffer.length; i += 1) {
+      const v = floatBuffer[i];
+      sum += v * v;
+    }
+    return Math.sqrt(sum / floatBuffer.length);
   }
 
   function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
@@ -104,11 +113,17 @@
     send({ cmd: 'mic_state', title: state, text: detail });
   }
 
+  // function logClientAudioStats(reason) {
+  //   appendLog(`[display] ${reason} chunks=${outgoingChunkCount} bytes=${outgoingByteCount}`);
+  // }
+
   async function ensureMicArmed() {
     if (micArmed) {
       hideOverlay();
       return;
     }
+
+
 
     showOverlay('Requesting microphone permission...');
 
@@ -124,7 +139,7 @@
 
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     sourceNode = audioContext.createMediaStreamSource(mediaStream);
-    processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+    processorNode = audioContext.createScriptProcessor(1024, 1, 1);
 
     processorNode.onaudioprocess = (event) => {
       if (!audioWs || audioWs.readyState !== WebSocket.OPEN) {
@@ -133,8 +148,12 @@
 
       const input = event.inputBuffer.getChannelData(0);
       const downsampled = downsampleBuffer(input, audioContext.sampleRate, 16000);
+      const rms = calculateRms(downsampled);
       const pcm16 = floatTo16BitPCM(downsampled);
       audioWs.send(pcm16.buffer);
+      outgoingChunkCount += 1;
+      outgoingByteCount += pcm16.byteLength;
+      send({ cmd: 'mic_metrics', title: 'audio_level', text: JSON.stringify({ rms, chunkBytes: pcm16.byteLength }) });
     };
 
     sourceNode.connect(processorNode);
@@ -143,7 +162,8 @@
     micArmed = true;
     hideOverlay();
     sendMicState('armed', 'Microphone permission granted on display device.');
-    appendLog('[display] microphone armed');
+    send({ cmd: 'mic_backend', title: 'permission_granted', text: 'Microphone permission granted on display device.' });
+    console.log('[display] microphone armed');
   }
 
   async function startMicStream() {
@@ -164,10 +184,12 @@
       audioWs.onopen = resolve;
       audioWs.onerror = reject;
     });
-
     micStreaming = true;
+    outgoingChunkCount = 0;
+    outgoingByteCount = 0;
+    send({ cmd: 'mic_backend', title: 'stream_connected', text: 'Display connected to /ws/audio' });
     sendMicState('streaming', 'Microphone streaming is active.');
-    appendLog('[display] microphone stream started');
+    console.log('[display] microphone stream started');
   }
 
   async function stopMicStream() {
@@ -184,8 +206,9 @@
     }
 
     micStreaming = false;
+    send({ cmd: 'mic_backend', title: 'stream_disconnected', text: 'Display disconnected from /ws/audio' });
     sendMicState(micArmed ? 'armed' : 'needs_local_enable', micArmed ? 'Microphone stream stopped.' : 'Click Enable Microphone on display device.');
-    appendLog('[display] microphone stream stopped');
+    console.log('[display] microphone stream stopped');
   }
 
   async function onEnableMicClick() {
@@ -193,8 +216,9 @@
       await ensureMicArmed();
     } catch (error) {
       sendMicState('error', `Failed to arm microphone: ${String(error)}`);
+      send({ cmd: 'mic_backend', title: 'permission_error', text: String(error) });
       showOverlay('Microphone permission failed. Check browser settings and try again.');
-      appendLog('[display] microphone arm failed', error);
+      console.log('[display] microphone arm failed', error);
     }
   }
 
@@ -215,25 +239,32 @@
 
     if (cmd === 'mic_status') {
       if (micStreaming) {
+        send({ cmd: 'mic_backend', title: 'model_loaded', text: 'Model loaded (stream active).' });
+      } else if (micArmed) {
+        send({ cmd: 'mic_backend', title: 'model_not_loaded', text: 'Model loads when stream starts.' });
+      }
+
+      if (micStreaming) {
         sendMicState('streaming', 'Microphone streaming is active.');
       } else if (micArmed) {
         sendMicState('armed', 'Microphone is armed and ready.');
       } else {
         sendMicState('needs_local_enable', 'Click Enable Microphone on display device.');
+        send({ cmd: 'mic_backend', title: 'waiting_permission', text: 'Waiting for local microphone enable.' });
       }
     }
   }
 
   function connectWebSocket() {
     ws = new WebSocket(`ws://${location.host}/ws`);
-    ws.onopen    = () => appendLog("[display] ws connected");
+    // ws.onopen    = () => appendLog("[display] ws connected");
     ws.onclose   = () => {
-      appendLog("[display] ws closed, reconnecting...");
+      // appendLog("[display] ws closed, reconnecting...");
       setTimeout(connectWebSocket, 2000);
     };
-    ws.onerror   = (e) => appendLog("[display] ws error", e);
+    ws.onerror   = (e) => console.error("[display] ws error", e);
     ws.onmessage = (ev) => {
-      appendLog("[display] recv", ev.data);
+      // appendLog("[display] recv", ev.data);
       const m = JSON.parse(ev.data);
       if (m.cmd === "set") {
         if (m.title !== undefined) document.getElementById('title').textContent = m.title;
@@ -242,7 +273,7 @@
         document.getElementById('text').textContent = "";
       } else if (m.cmd && m.cmd.startsWith('mic_')) {
         handleMicCommand(m.cmd).catch((err) => {
-          appendLog('[display] mic command failed', err);
+          // appendLog('[display] mic command failed', err);
           sendMicState('error', `Mic command failed: ${String(err)}`);
         });
       }

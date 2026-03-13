@@ -1,12 +1,19 @@
+import logging
+
 import uvicorn
 
 import src.server as server
 
 
 def main():
-    print("[main] Starting liturgy display app...")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logger = logging.getLogger("display.main")
 
-    print("[main] Starting server on http://0.0.0.0:8000")
+    logger.info("Starting liturgy display app")
+    logger.info("Starting server on http://0.0.0.0:8000")
     uvicorn.run(server.app, host="0.0.0.0", port=8000)
 
 
