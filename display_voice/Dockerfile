@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY requirements.txt ./
 
-RUN apt-get update && apt-get install -y portaudio19-dev python3-dev libasound-dev python3-pip libasound2-dev alsa-utils wget unzip && rm -rf /var/lib/apt/lists/*  
+RUN apt-get update && apt-get install -y wget unzip && rm -rf /var/lib/apt/lists/*
 
 RUN pip install -r requirements.txt
 

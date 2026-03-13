@@ -1,42 +1,81 @@
-import threading
-import pyaudio
 import json
-import queue
+import os
+import threading
 from collections import deque
-from vosk import Model, KaldiRecognizer
 
-#load reading module
+from dotenv import load_dotenv
+from vosk import KaldiRecognizer, Model
+
 from src.reading import get_material
 from src.server import send_command
 
-#load environment variables
-import os
-from dotenv import load_dotenv
 load_dotenv()
 
-WORDS_PER_SLIDE = int(os.getenv("WORDS_PER_SLIDE"))
-QUEUE_MAXSIZE = 50             
-
-committed_words = []
-last_partial_words = []
+WORDS_PER_SLIDE = int(os.getenv("WORDS_PER_SLIDE", "40"))
 
 slide_title = ""
 slidequeue = deque()
 isReadingActive = False
 
+_model = None
+_recognizer = None
+_audio_lock = threading.Lock()
+_committed_word_count = 0
+_last_partial_words = []
+_last_live_word_count = 0
+_word_anchor = 0
+
+
+def _ensure_model():
+    global _model
+    if _model is None:
+        model_path = os.getenv("MODEL_PATH")
+        if not model_path:
+            raise RuntimeError("MODEL_PATH is not set")
+        _model = Model(model_path)
+
+
+def _reset_word_tracking():
+    global _committed_word_count
+    global _last_partial_words
+    global _last_live_word_count
+    global _word_anchor
+    _committed_word_count = 0
+    _last_partial_words = []
+    _last_live_word_count = 0
+    _word_anchor = 0
+
+
+def start_audio_session():
+    global _recognizer
+    with _audio_lock:
+        _ensure_model()
+        _recognizer = KaldiRecognizer(_model, 16000)
+        _reset_word_tracking()
+    print("[voice_rec] Audio session started")
+
+
+def stop_audio_session():
+    global _recognizer
+    with _audio_lock:
+        _recognizer = None
+        _reset_word_tracking()
+    print("[voice_rec] Audio session stopped")
+
+
 async def load_slides_for_reading(reading_type: str):
     global slidequeue
     global isReadingActive
-    global committed_words
     global slide_title
-    
-    committed_words = []
+
     isReadingActive = True
     slidequeue.clear()
+    with _audio_lock:
+        _reset_word_tracking()
     slide_object = await get_material(reading_type, WORDS_PER_SLIDE)
     new_slides = slide_object.get("slides", [])
     slide_title = slide_object.get("title", "")
-    
+
     for slide in new_slides:
         slidequeue.append(slide)
 
@@ -44,10 +83,11 @@ async def load_slides_for_reading(reading_type: str):
 
     send_next_slide()
 
+
 def send_next_slide():
     global slidequeue
     global isReadingActive
-    
+
     if slidequeue:
         slide = slidequeue.popleft()
         send_command({"cmd": "set", "title": slide_title, "text": slide})
@@ -55,119 +95,91 @@ def send_next_slide():
         print("[voice_rec] No more slides")
         stop_reading()
 
+
 def stop_reading():
     global isReadingActive
-    global currentWordCount
     global slidequeue
     global slide_title
-    
+
     isReadingActive = False
     slide_title = ""
-    currentWordCount = []
     slidequeue.clear()
+    with _audio_lock:
+        _reset_word_tracking()
 
     send_command({"cmd": "set", "title": slide_title, "text": ""})
 
 
-async def handle_command(cmd: str, title: str):
+async def handle_command(cmd: str, title: str = "", text: str = ""):
     print(f"[voice_rec] Received command: {cmd}, title: {title}")
-    
+
     if cmd == "show":
         reading_type = title
         if reading_type:
             await load_slides_for_reading(reading_type)
-    
+
     elif cmd == "clear":
         stop_reading()
+    elif cmd == "set":
+        send_command({"cmd": "set", "title": title, "text": text})
+    elif cmd in {"mic_start", "mic_stop", "mic_status", "mic_state"}:
+        send_command({"cmd": cmd, "title": title, "text": text})
 
-def process_words(currentCount: str):
-    global committed_words
 
-    print(f"[voice_rec] Committed words: {committed_words}")
+def _update_progress(live_word_count: int):
+    global _last_live_word_count
+    global _word_anchor
+
     if not isReadingActive:
         return
-    
-    temp_word_count = len(committed_words)
-    if temp_word_count >= WORDS_PER_SLIDE:
-        committed_words = []
+
+    if live_word_count < _last_live_word_count:
+        _last_live_word_count = live_word_count
+        return
+
+    _last_live_word_count = live_word_count
+    while isReadingActive and (_last_live_word_count - _word_anchor) >= WORDS_PER_SLIDE:
+        _word_anchor += WORDS_PER_SLIDE
         send_next_slide()
 
-def word_recogniser_worker(audio_queue: queue.Queue):
-    model = Model(os.getenv("MODEL_PATH"))
-    rec = KaldiRecognizer(model, 16000)
-    global committed_words
-    global last_partial_words 
-    
+
+def ingest_audio_chunk(data: bytes):
+    global _committed_word_count
+    global _last_partial_words
+
+    if not data:
+        return
+
     def common_prefix_len(a, b) -> int:
         n = min(len(a), len(b))
         i = 0
         while i < n and a[i] == b[i]:
             i += 1
         return i
-    
-    while True:
-        if isReadingActive:
-            try:
-                data = audio_queue.get(timeout=0.5)
-            except queue.Empty:
-                continue
-            if data:
-                try:
-                    if rec.AcceptWaveform(data):
-                        r = json.loads(rec.Result())
-                        text = r.get("text", "").strip()
-                        if text:
-                            last_partial_words = []
-                            process_words(text)  # final, stable
-                    else:
-                        p = json.loads(rec.PartialResult())
-                        partial = p.get("partial", "").strip()
-                        if partial:
-                            current_partial_words = partial.split()
-                            # (optional) compute delta vs last partial, for incremental UI updates
-                            cp = common_prefix_len(last_partial_words, current_partial_words)
-                            new_words = current_partial_words[cp:]
-                            committed_words.extend(new_words)
-                            last_partial_words = current_partial_words
 
-                            live_count = len(committed_words) + len(current_partial_words)
-                            process_words(live_count)
+    with _audio_lock:
+        if _recognizer is None:
+            return
 
-                    audio_queue.task_done()
-                except Exception as e:
-                    print(f"Recognition error: {e}")
-def list_audio_devices():
-    mic = pyaudio.PyAudio()
-    print("[voice_rec] Available audio input devices:")
-    for i in range(mic.get_device_count()):
-        info = mic.get_device_info_by_index(i)
-        if info.get("maxInputChannels", 0) > 0:
-            print(f"  [{i}] {info['name']}")
-    mic.terminate()
+        try:
+            if _recognizer.AcceptWaveform(data):
+                result = json.loads(_recognizer.Result())
+                text = result.get("text", "").strip()
+                if text:
+                    _committed_word_count += len(text.split())
+                    _last_partial_words = []
+                live_count = _committed_word_count
+            else:
+                partial_result = json.loads(_recognizer.PartialResult())
+                partial = partial_result.get("partial", "").strip()
+                if partial:
+                    current_partial_words = partial.split()
+                    _last_partial_words = current_partial_words
+                    live_count = _committed_word_count + len(current_partial_words)
+                else:
+                    live_count = _committed_word_count
+        except Exception as exc:
+            print(f"[voice_rec] Recognition error: {exc}")
+            return
 
-def audio_stream_worker(audio_queue: queue.Queue):
-    device_index_env = os.getenv("MIC_DEVICE_INDEX")
-    device_index = int(device_index_env) if device_index_env is not None else None
-
-    mic = pyaudio.PyAudio()
-    stream = mic.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True,
-                      frames_per_buffer=8192, input_device_index=device_index)
-    stream.start_stream()
-    while True:
-        data = stream.read(4096, exception_on_overflow=False)
-        audio_queue.put(data, block=True)
-
-def run_voice_recognition():
-    list_audio_devices()
-
-    audio_queue = queue.Queue(maxsize=QUEUE_MAXSIZE)
-
-    recogniser_thread = threading.Thread(target=word_recogniser_worker, args=(audio_queue,))
-    recogniser_thread.start()
-    
-    stream_thread = threading.Thread(target=audio_stream_worker, args=(audio_queue,))
-    stream_thread.start()
-    
-if __name__ == "__main__":
-    print("[voice_rec] Running standalone")
-    run_voice_recognition()
+    _update_progress(live_count)

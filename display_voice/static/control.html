@@ -15,6 +15,11 @@
 
       
       <div class="flex flex-wrap items-center justify-center gap-3 mb-8">
+        <button id="btn-mic-toggle"
+          class="text-lg px-4 py-3 rounded-lg bg-emerald-700 text-white border border-emerald-500 hover:bg-emerald-600 active:bg-emerald-800 transition">
+          Start Mic
+        </button>
+        <span id="mic-status" class="text-sm opacity-80">Mic: loading...</span>
         <button id="btn-reading1"
           class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
           Reading 1
@@ -46,24 +51,63 @@
           class="text-lg px-4 py-3 rounded-lg bg-gray-500 text-white border border-gray-600 hover:bg-sky-300 active:bg-black transition">
           Send
         </button>
+        <span id="send-status" class="ml-3 text-sm opacity-70"></span>
       </div>
     </div>
   </main>
 
   <script>
     let ws;
+    let micStreaming = false;
+    let sendStatusTimer;
+
+    const micToggleButton = document.getElementById('btn-mic-toggle');
+    const micStatus = document.getElementById('mic-status');
+    const titleInput = document.getElementById('title');
+    const textInput = document.getElementById('text');
+    const sendButton = document.getElementById('btn-send');
+    const sendStatus = document.getElementById('send-status');
+
     function connectWebSocket() {
       ws = new WebSocket(`ws://${location.host}/ws`);
-      ws.onopen  = () => console.log("[remote] ws connected");
+      ws.onopen  = () => {
+        console.log("[remote] ws connected");
+        send({ cmd: "mic_status" });
+      };
       ws.onclose = () => {
         console.log("[remote] ws closed, reconnecting...");
         setTimeout(connectWebSocket, 2000);
+      };
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.cmd === "mic_state") {
+            applyMicState(message.title || "unknown", message.text || "");
+          }
+        } catch (error) {
+          console.warn("Failed to parse WS message", error);
+        }
       };
       ws.onerror = () => {
         // Optionally handle errors, but reconnection is handled in onclose
       };
     }
     connectWebSocket();
+
+    function applyMicState(state, detail) {
+      if (state === "streaming") {
+        micStreaming = true;
+        micToggleButton.textContent = "Stop Mic";
+        micToggleButton.className = "text-lg px-4 py-3 rounded-lg bg-red-700 text-white border border-red-500 hover:bg-red-600 active:bg-red-800 transition";
+      } else {
+        micStreaming = false;
+        micToggleButton.textContent = "Start Mic";
+        micToggleButton.className = "text-lg px-4 py-3 rounded-lg bg-emerald-700 text-white border border-emerald-500 hover:bg-emerald-600 active:bg-emerald-800 transition";
+      }
+
+      const label = state || "unknown";
+      micStatus.textContent = detail ? `Mic: ${label} - ${detail}` : `Mic: ${label}`;
+    }
 
     function send(payload) {
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -72,6 +116,35 @@
         console.warn("WebSocket not connected, cannot send:", payload);
       }
     }
+
+    function flashSendStatus(message) {
+      clearTimeout(sendStatusTimer);
+      sendStatus.textContent = message;
+      sendStatusTimer = setTimeout(() => {
+        sendStatus.textContent = "";
+      }, 1200);
+    }
+
+    function sendCustomText() {
+      const title = titleInput.value.trim();
+      const text = textInput.value.trim();
+
+      if (!title && !text) {
+        flashSendStatus("Nothing to send");
+        textInput.focus();
+        return;
+      }
+
+      send({ cmd: "set", title, text });
+      titleInput.value = "";
+      textInput.value = "";
+      textInput.focus();
+      flashSendStatus("Sent");
+    }
+
+    micToggleButton.onclick = () => {
+      send({ cmd: micStreaming ? "mic_stop" : "mic_start" });
+    };
 
     document.getElementById('btn-reading1').onclick = () => {
       send({ cmd: "show", title: "Reading 1" });
@@ -86,13 +159,38 @@
       send({ cmd: "clear" });
     };
 
-    document.getElementById('btn-send').onclick = () => {
-      const title = document.getElementById('title').value;
-      const text  = document.getElementById('text').value;
-      send({ cmd: "set", title, text });
-      document.getElementById('title').value = "";
-      document.getElementById('text').value = "";
+    sendButton.onclick = () => {
+      sendCustomText();
     };
+
+    titleInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendCustomText();
+      }
+    });
+
+    textInput.addEventListener("keydown", (event) => {
+      const isEnter = event.key === "Enter";
+      const wantsNewline = event.shiftKey;
+      const shortcutSend = (event.ctrlKey || event.metaKey) && isEnter;
+
+      if (shortcutSend) {
+        event.preventDefault();
+        sendCustomText();
+        return;
+      }
+
+      if (isEnter && !wantsNewline) {
+        event.preventDefault();
+        sendCustomText();
+      }
+    });
+
+    setInterval(() => {
+      send({ cmd: "mic_status" });
+    }, 5000);
+
   </script>
 </body>
 </html>

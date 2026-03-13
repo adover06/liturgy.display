@@ -4,6 +4,9 @@ set -e
 MODEL_PATH=${MODEL_PATH:-"/app/vosk-model"}
 MODEL_URL=${VOSK_MODEL_URL:-"https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"}
 
+export MODEL_PATH
+export VOSK_MODEL_URL="$MODEL_URL"
+
 # Check if the model directory is empty
 if [ ! -d "$MODEL_PATH/am" ] && [ ! -d "$MODEL_PATH/conf" ]; then
     echo "--- Model not found. Downloading from $MODEL_URL ---"

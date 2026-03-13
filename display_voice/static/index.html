@@ -8,6 +8,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body class="">
+  <div id="mic-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+    <div class="max-w-md rounded-xl bg-white p-6 text-center shadow-2xl">
+      <h2 class="mb-2 text-2xl font-bold">Enable Microphone</h2>
+      <p class="mb-4 text-sm text-gray-700">
+        Click once on this display device to allow microphone access.
+        After this, mic can be started/stopped remotely from /control.
+      </p>
+      <button id="btn-enable-mic" class="rounded-lg bg-emerald-700 px-4 py-3 text-white hover:bg-emerald-600">
+        Enable Microphone
+      </button>
+      <p id="mic-overlay-status" class="mt-3 text-xs text-gray-600"></p>
+    </div>
+  </div>
   <div id="title" class="block text-5xl text-black m-4 mr-10 tracking-wide text-right" style="font-family: 'Crimson Pro', serif;"></div>
   <div id="text" class="text-4xl m-10 md:text-8xl leading-tight md:leading-tight text-black px-4" style="font-family: 'Crimson Pro', serif;">
     Welcome
@@ -20,6 +33,197 @@
     }
 
   let ws;
+  let audioWs;
+  let audioContext;
+  let mediaStream;
+  let sourceNode;
+  let processorNode;
+
+  let micArmed = false;
+  let micStreaming = false;
+
+  const overlay = document.getElementById('mic-overlay');
+  const overlayStatus = document.getElementById('mic-overlay-status');
+  const enableMicButton = document.getElementById('btn-enable-mic');
+
+  function showOverlay(statusText = '') {
+    overlay.classList.remove('hidden');
+    overlayStatus.textContent = statusText;
+  }
+
+  function hideOverlay() {
+    overlay.classList.add('hidden');
+    overlayStatus.textContent = '';
+  }
+
+  function floatTo16BitPCM(floatBuffer) {
+    const int16 = new Int16Array(floatBuffer.length);
+    for (let i = 0; i < floatBuffer.length; i += 1) {
+      const sample = Math.max(-1, Math.min(1, floatBuffer[i]));
+      int16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    }
+    return int16;
+  }
+
+  function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
+    if (outputSampleRate === inputSampleRate) {
+      return buffer;
+    }
+    if (outputSampleRate > inputSampleRate) {
+      throw new Error('Output sample rate must be less than input sample rate');
+    }
+
+    const sampleRateRatio = inputSampleRate / outputSampleRate;
+    const newLength = Math.round(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+    while (offsetResult < result.length) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+      let accum = 0;
+      let count = 0;
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i += 1) {
+        accum += buffer[i];
+        count += 1;
+      }
+      result[offsetResult] = count > 0 ? accum / count : 0;
+      offsetResult += 1;
+      offsetBuffer = nextOffsetBuffer;
+    }
+    return result;
+  }
+
+  function send(payload) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    }
+  }
+
+  function sendMicState(state, detail = '') {
+    send({ cmd: 'mic_state', title: state, text: detail });
+  }
+
+  async function ensureMicArmed() {
+    if (micArmed) {
+      hideOverlay();
+      return;
+    }
+
+    showOverlay('Requesting microphone permission...');
+
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
+      video: false
+    });
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    sourceNode = audioContext.createMediaStreamSource(mediaStream);
+    processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+
+    processorNode.onaudioprocess = (event) => {
+      if (!audioWs || audioWs.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      const input = event.inputBuffer.getChannelData(0);
+      const downsampled = downsampleBuffer(input, audioContext.sampleRate, 16000);
+      const pcm16 = floatTo16BitPCM(downsampled);
+      audioWs.send(pcm16.buffer);
+    };
+
+    sourceNode.connect(processorNode);
+    processorNode.connect(audioContext.destination);
+
+    micArmed = true;
+    hideOverlay();
+    sendMicState('armed', 'Microphone permission granted on display device.');
+    appendLog('[display] microphone armed');
+  }
+
+  async function startMicStream() {
+    if (micStreaming) {
+      return;
+    }
+
+    if (!micArmed) {
+      showOverlay('Microphone must be enabled on this display device first.');
+      sendMicState('needs_local_enable', 'Click Enable Microphone on display device.');
+      return;
+    }
+
+    audioWs = new WebSocket(`ws://${location.host}/ws/audio`);
+    audioWs.binaryType = 'arraybuffer';
+
+    await new Promise((resolve, reject) => {
+      audioWs.onopen = resolve;
+      audioWs.onerror = reject;
+    });
+
+    micStreaming = true;
+    sendMicState('streaming', 'Microphone streaming is active.');
+    appendLog('[display] microphone stream started');
+  }
+
+  async function stopMicStream() {
+    if (!micStreaming) {
+      sendMicState(micArmed ? 'armed' : 'needs_local_enable', micArmed ? 'Ready to start.' : 'Click Enable Microphone on display device.');
+      return;
+    }
+
+    if (audioWs) {
+      if (audioWs.readyState === WebSocket.OPEN || audioWs.readyState === WebSocket.CONNECTING) {
+        audioWs.close();
+      }
+      audioWs = null;
+    }
+
+    micStreaming = false;
+    sendMicState(micArmed ? 'armed' : 'needs_local_enable', micArmed ? 'Microphone stream stopped.' : 'Click Enable Microphone on display device.');
+    appendLog('[display] microphone stream stopped');
+  }
+
+  async function onEnableMicClick() {
+    try {
+      await ensureMicArmed();
+    } catch (error) {
+      sendMicState('error', `Failed to arm microphone: ${String(error)}`);
+      showOverlay('Microphone permission failed. Check browser settings and try again.');
+      appendLog('[display] microphone arm failed', error);
+    }
+  }
+
+  enableMicButton.addEventListener('click', () => {
+    onEnableMicClick();
+  });
+
+  async function handleMicCommand(cmd) {
+    if (cmd === 'mic_start') {
+      await startMicStream();
+      return;
+    }
+
+    if (cmd === 'mic_stop') {
+      await stopMicStream();
+      return;
+    }
+
+    if (cmd === 'mic_status') {
+      if (micStreaming) {
+        sendMicState('streaming', 'Microphone streaming is active.');
+      } else if (micArmed) {
+        sendMicState('armed', 'Microphone is armed and ready.');
+      } else {
+        sendMicState('needs_local_enable', 'Click Enable Microphone on display device.');
+      }
+    }
+  }
+
   function connectWebSocket() {
     ws = new WebSocket(`ws://${location.host}/ws`);
     ws.onopen    = () => appendLog("[display] ws connected");
@@ -36,10 +240,19 @@
         if (m.text  !== undefined) document.getElementById('text').textContent  = m.text;
       } else if (m.cmd === "clear") {
         document.getElementById('text').textContent = "";
+      } else if (m.cmd && m.cmd.startsWith('mic_')) {
+        handleMicCommand(m.cmd).catch((err) => {
+          appendLog('[display] mic command failed', err);
+          sendMicState('error', `Mic command failed: ${String(err)}`);
+        });
       }
     };
   }
   connectWebSocket();
+
+  window.addEventListener('beforeunload', () => {
+    stopMicStream();
+  });
   </script>
 </body>
 </html>
