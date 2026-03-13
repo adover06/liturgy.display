@@ -8,13 +8,4 @@ services:
       - "8000:8000"
     # devices:
       # - /dev/snd:/dev/snd
-    env_file:
-      - .env
-    environment:
-      - VOSK_MODEL_URL=https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-      - MODEL_PATH=/app/vosk-model
-  bot:
-    build: ./discord
-    volumes:
-      - ./discord:/app
 

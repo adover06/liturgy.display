@@ -16,7 +16,6 @@ fastapi==0.122.0
 h11==0.16.0
 html5lib==1.1
 idna==3.11
-PyAudio==0.2.14
 pycparser==2.23
 pydantic==2.12.4
 pydantic_core==2.41.5
