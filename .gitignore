@@ -7,3 +7,4 @@ venv/
 model/*.json
 model/words.txt
 vosk-model/
+.env
